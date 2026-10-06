@@ -686,6 +686,8 @@ function inject (bot) {
     // (Bedrock: nothing stops the player but friction, fullStop writing to a copy: the last step is reached once the
     // player has slowed in it, not sliding through it; meanwhile it lets go of the keys)
     const sliding = physics.bedrock && path.length === 1 && Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z) > ARRIVE_SPEED
+    // (a glide landed sliding on the last step: the rest of the way walked, to stop there)
+    if (sliding && nextPoint.glide && physics.landedFrom(nextPoint)) delete nextPoint.glide
     if (sliding && Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1 && !nextPoint.glide && !nextPoint.fly && !nextPoint.boat) {
       physics.coast()
       return

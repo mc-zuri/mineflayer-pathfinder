@@ -3,10 +3,18 @@
 // meanwhile: it still gets there, every tick as predicted, planning on rather than starting over. (tickNodes 1: a node a
 // tick, the same every time.)
 const assert = require('assert')
+const { Vec3 } = require('vec3')
 const { bedrockBot, walkTo } = require('./bedrockBot')
 const { pathfinder, Movements, goals } = require('..')
 
 const plateau = (x, y, z) => y < 64 || (x >= 40 && x <= 46 && Math.abs(z) <= 3 && y < 74) ? 'stone' : 'air'
+const tower = (x, y, z) => y < 64 || (Math.abs(x) <= 1 && Math.abs(z) <= 1 && y < 84) ? 'stone' : 'air'
+const canal = (x, y, z) => {
+  const water = (x >= 2 && x <= 12 && Math.abs(z) <= 1) || (x >= 10 && x <= 12 && z >= -14 && z <= 1)
+  if (water) return y >= 58 && y <= 63 ? 'water' : y < 58 ? 'stone' : 'air'
+  const bank = (x >= -3 && x <= 1 && Math.abs(z) <= 1) || (x >= 9 && x <= 13 && z >= -17 && z <= -15)
+  return y < 64 || (!bank && y < 66) ? 'stone' : 'air'
+}
 // a wall 3 high along x 5 from z -12 to 12: a goal behind it is a long way round, the best path so far ending at it
 const wall = (x, y, z) => y < 64 || (x === 5 && Math.abs(z) <= 12 && y < 67) ? 'stone' : 'air'
 const steps = (x, y) => y < 64 || (x >= 4 && y < 65) || (x >= 8 && y < 66) ? 'stone' : 'air'
@@ -51,6 +59,16 @@ describe('planning a slice a tick on Bedrock', function () {
   it('glides up onto a plateau with rockets', function () {
     const seen = sliced(plateau, { elytra: true, items: [{ name: 'firework_rocket', count: 16 }] }, { allowGliding: true }, new goals.GoalBlock(43, 74, 0), 1200, ['glide'])
     assert.ok(seen.gliding > 0)
+  })
+
+  it('glides down from a tower, ending on its goal rather than sliding past it', function () {
+    const seen = sliced(tower, { position: new Vec3(0.5, 84, 0.5), elytra: true }, { allowGliding: true }, new goals.GoalBlock(30, 64, 0), 1200, ['glide'])
+    assert.ok(seen.gliding > 0)
+  })
+
+  it('takes a boat round a canal\'s bend', function () {
+    const seen = sliced(canal, { items: [{ name: 'oak_boat', count: 1 }] }, { allowBoats: true }, new goals.GoalBlock(11, 64, -16), 1200)
+    assert.ok(seen.riding > 0)
   })
 
   it('walks round a wall, planning on when the best path so far ends at it', function () {
