@@ -83,6 +83,14 @@ describe('swimming', function () {
     assert.deepStrictEqual(java, [])
   })
 
+  it('costs more with the head under water, keeping a swimmer to the top of the water', function () {
+    // a step through the water costs 2 (the step and the water's); ending with the head under, 2 more
+    const cost = (version, from, to) => fixture(version).movements.getNeighbors(node(...from)).find(m => `${m.x},${m.y},${m.z}` === to).cost
+    assert.strictEqual(cost(versions.bedrock, [2, 60, 0], '3,60,0'), 4, 'deep in the water')
+    assert.strictEqual(cost(versions.bedrock, [2, 63, 0], '3,63,0'), 2, 'along its top, the head out')
+    assert.strictEqual(cost(versions.java, [2, 60, 0], '3,60,0'), 2, 'on Java, as before')
+  })
+
   it('builds nothing to climb from the water', function () {
     const { movements, put } = fixture(versions.bedrock)
     // the bank gone: water, then air over the ground
