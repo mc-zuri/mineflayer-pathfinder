@@ -584,6 +584,13 @@ function inject (bot) {
       return
     }
 
+    // (Bedrock: a jump from far back lands past the block it went up to)
+    const passed = physics.landedPast(path)
+    if (passed > 0) {
+      path.splice(0, passed)
+      nextPoint = path[0]
+      lastNodeTime = performance.now()
+    }
     let dx = nextPoint.x - p.x
     const dy = nextPoint.y - p.y
     let dz = nextPoint.z - p.z
@@ -624,8 +631,16 @@ function inject (bot) {
     // afloat: in the water, or bobbing over it (out of it for the engine, the feet's cell water and nothing under them)
     const afloat = bot.entity.isInWater || (!bot.entity.onGround && stateMovements.getBlock(p.floored(), 0, 0, 0).liquid)
     const swim = afloat && stateMovements.allowSwimming && physics.swimController(path, stateMovements.allowSprinting)
+    // (Bedrock: a jump up a block from far enough back to clear its edge, past the point before it)
+    const jump = !afloat && physics.jumpAhead(path, stateMovements.allowSprinting)
     if (swim) {
       physics.control(swim)
+    } else if (jump) {
+      if (jump.skip) {
+        path.shift()
+        lastNodeTime = performance.now()
+      }
+      physics.control(jump.controller)
     } else if (bot.entity.isInWater) {
       bot.setControlState('jump', true)
       bot.setControlState('sprint', false)
