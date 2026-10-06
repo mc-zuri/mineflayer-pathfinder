@@ -18,6 +18,8 @@ const { isBoatItem } = require('./lib/boat')
 const BOAT_WAIT_TICKS = 40
 const BOAT_STUCK_MS = 6000
 const BOAT_REACH = 4
+// on Bedrock, a player slower than this (blocks a tick) has stopped at the last step: walking arrives at some 0.08
+const ARRIVE_SPEED = 0.15
 
 function inject (bot) {
   const ladderId = bot.registry.blocksByName.ladder.id
@@ -679,6 +681,13 @@ function inject (bot) {
     let dz = nextPoint.z - p.z
     // (Bedrock's creative flight: a flown step is reached flying, in its cell; a walked one landed)
     const flies = stateMovements.allowFlying && (physics.flying() || !!nextPoint.fly || physics.landing)
+    // (Bedrock: nothing stops the player but friction, fullStop writing to a copy: the last step is reached once the
+    // player has slowed in it, not sliding through it; meanwhile it lets go of the keys)
+    const sliding = physics.bedrock && path.length === 1 && Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z) > ARRIVE_SPEED
+    if (sliding && Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1 && !nextPoint.glide && !nextPoint.fly && !nextPoint.boat) {
+      bot.clearControlStates()
+      return
+    }
     // (a glide: landed, on its cell or one beside it; a boat's step: the boat in its cell)
     // (in a boat past the next step: those it passed are reached too)
     const boatPassed = nextPoint.boat && physics.riding() ? physics.boatPassed(path) : 0
@@ -692,7 +701,7 @@ function inject (bot) {
         ? physics.landedFrom(nextPoint)
         : flies
           ? physics.flying() === !!nextPoint.fly && physics.getFlyReached(nextPoint)({ pos: p }) && !(physics.landing && !bot.entity.onGround)
-          : Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1 && !(stateMovements.allowBoats && physics.riding())
+          : Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1 && !(stateMovements.allowBoats && physics.riding()) && !sliding
     if (arrived) {
       // arrived at next point
       lastNodeTime = performance.now()
