@@ -76,6 +76,18 @@ describe('elytra gliding on Bedrock', function () {
     assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
   })
 
+  it('lands where it can when its goal changes in the air: a glide cannot turn back on a dime', function () {
+    const { bot, tick } = setup(tower, { position: new Vec3(0.5, 84, 0.5), elytra: true })
+    bot.pathfinder.setGoal(new goals.GoalBlock(40, 64, 0))
+    for (let i = 0; i < 25; i++) tick()
+    assert.ok(bot.entity.elytraFlying, 'gliding')
+    // a goal just behind it: no glide from the ground could be that short, but this one must land
+    const goal = new goals.GoalBlock(Math.floor(bot.entity.position.x) - 3, 64, 0)
+    const ticks = walkTo(bot, tick, goal, 400)
+    assert.ok(Number.isFinite(ticks), `arrived: at ${bot.entity.position}`)
+    assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
+  })
+
   it('walks on flat ground without rockets', function () {
     const { bot, movements } = setup(flat, { elytra: true })
     const path = search(bot, movements, new goals.GoalBlock(40, 64, 0)).path
