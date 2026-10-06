@@ -68,6 +68,7 @@ describe('planning a slice a tick on Bedrock', function () {
     const ticks = walkTo(bot, tick, new goals.GoalBlock(8, 64, 0), 1500)
     assert.ok(Number.isFinite(ticks), `arrived: at ${bot.entity.position}`)
     assert.ok(!resets.includes('goal_missed'), `planned over ${resets.filter(r => r === 'goal_missed').length} times`)
+    assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
   })
 
   it('sprints up steps', function () {

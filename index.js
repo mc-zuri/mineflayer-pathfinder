@@ -758,12 +758,9 @@ function inject (bot) {
     if (stateMovements.allowFlying && (physics.flying() || nextPoint.fly || physics.landing)) {
       const fly = physics.flyController(path)
       if (fly || physics.flying() || nextPoint.fly) {
-        if (fly) {
-          physics.control(fly)
-        } else {
-          bot.setControlState('forward', false)
-          bot.setControlState('sprint', false)
-        }
+        // (none gets there: the keys let go, as a prediction shows the tick)
+        if (fly) physics.control(fly)
+        else physics.coast()
         if (performance.now() - lastNodeTime > 3500) resetPath('stuck')
         return
       }
@@ -803,6 +800,9 @@ function inject (bot) {
     } else if (physics.canWalkJump(path)) {
       bot.setControlState('jump', true)
       bot.setControlState('sprint', false)
+    } else if (physics.bedrock) {
+      // (Bedrock: no way there predicted: the keys let go, as a prediction shows the tick)
+      physics.coast()
     } else {
       bot.setControlState('forward', false)
       bot.setControlState('sprint', false)
