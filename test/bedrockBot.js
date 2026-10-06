@@ -100,9 +100,11 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     // (the first tick of each prediction since the last tick is kept, to hold the tick to)
     physics: {
       simulatePlayer: (state, w) => {
+        // (a prediction from elsewhere than the player, a glide tried from a node of a search, is no prediction of it)
+        if (!runs.has(state) && !elsewhere.has(state) && !state.pos.equals(bot.entity.position)) elsewhere.add(state)
         const inputs = inputsOf(state.control, state.yaw, state.pitch)
         physics.simulatePlayer(state, w)
-        if (!runs.has(state)) runs.set(state, { inputs, after: snapshot(state) })
+        if (!runs.has(state) && !elsewhere.has(state)) runs.set(state, { inputs, after: snapshot(state) })
         return state
       }
     },
@@ -167,6 +169,7 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
   // inputs (none with them: the plugin gave inputs it predicted nothing with; one: the tick was not as predicted)
   const seen = { ticks: 0, collided: 0, airborne: 0, gliding: 0, boosted: 0, riding: 0, turned: 0, predicted: 0, mismatches: [] }
   let runs = new Map()
+  const elsewhere = new WeakSet()
   function tick () {
     runs = new Map()
     bot.emit('physicsTick')
