@@ -37,4 +37,25 @@ describe('prediction controller', () => {
     assert.deepStrictEqual([above.yaw, above.pitch], [1, 0])
     assert.deepStrictEqual(above.control, { forward: false, jump: true, sneak: false, sprint: false })
   })
+
+  it('stops walking letting go of forward and sprint alone: the sneak and back a bridge holds at an edge stay', function () {
+    const pressed = {}
+    const bot = {
+      registry: { type: 'bedrock' },
+      blockAt: () => null,
+      entity: { position: new Vec3(0.5, 64, 0.5), velocity: new Vec3(0, 0, 0), yaw: 0, pitch: 0 },
+      controlState: { forward: true, back: true, left: false, right: false, jump: false, sprint: true, sneak: true },
+      physics: { simulatePlayer: state => state },
+      look: () => {},
+      setControlState: (key, value) => { pressed[key] = value }
+    }
+    const physics = new Physics(bot)
+    physics.simulateUntil = (goal, controller, ticks) => {
+      const state = { pos: bot.entity.position, control: { ...bot.controlState } }
+      controller(state, 0)
+      return state
+    }
+    physics.halt()
+    assert.deepStrictEqual(pressed, { forward: false, sprint: false })
+  })
 })

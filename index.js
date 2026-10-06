@@ -803,8 +803,9 @@ function inject (bot) {
       bot.setControlState('jump', true)
       bot.setControlState('sprint', false)
     } else if (physics.bedrock) {
-      // (Bedrock: no way there predicted: the keys let go, as a prediction shows the tick)
-      physics.coast()
+      // (Bedrock: no way there predicted: forward and sprint let go, as a prediction shows the tick; the keys held
+      // besides stay, the sneak and back a bridge holds at the edge)
+      physics.halt()
     } else {
       bot.setControlState('forward', false)
       bot.setControlState('sprint', false)
