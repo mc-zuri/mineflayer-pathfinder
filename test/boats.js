@@ -90,6 +90,20 @@ describe('boats on Bedrock', function () {
     assert.strictEqual(items.find(item => /boat$/.test(item.name))?.count, 1, 'the boat picked up')
   })
 
+  it('gets out only where its way leaves the water, not at the end of a best path so far', function () {
+    const Physics = require('../lib/physics')
+    const { boatMove } = require('../lib/boat')
+    const Move = require('../lib/move')
+    const physics = new Physics({ registry: { type: 'bedrock' }, blockAt: () => null })
+    const node = { remainingBlocks: 0 }
+    const water = [boatMove(2, 63, 0, node, 1), boatMove(3, 63, 0, node, 1)]
+    // (a search's path so far, ending on the water)
+    assert.strictEqual(physics.boatSteps(water).end, false)
+    const out = new Move(4, 64, 0, 0, 1)
+    out.leave = true
+    assert.strictEqual(physics.boatSteps([...water, out]).end, true)
+  })
+
   it('finds no boat moves without a boat, nor when boats are not allowed', function () {
     const node = { x: 1, y: 64, z: 0, remainingBlocks: 0 }
     assert.ok(!setup(lake, []).movements.getNeighbors(node).some(move => move.boat))
