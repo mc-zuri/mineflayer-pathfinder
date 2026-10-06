@@ -1,4 +1,5 @@
-const { performance } = require('perf_hooks')
+// (the global clock: Node's since 16, and a browser's)
+const { performance } = globalThis
 
 const AStar = require('./lib/astar')
 const Move = require('./lib/move')
