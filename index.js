@@ -12,6 +12,12 @@ const Vec3 = require('vec3').Vec3
 const Physics = require('./lib/physics')
 const nbt = require('prismarine-nbt')
 const interactableBlocks = require('./lib/interactable.json')
+const { isBoatItem } = require('./lib/boat')
+
+// Bedrock's boats: the ticks getting in may take, how long a boat's step may take, and how near a boat is picked up
+const BOAT_WAIT_TICKS = 40
+const BOAT_STUCK_MS = 6000
+const BOAT_REACH = 4
 
 function inject (bot) {
   const ladderId = bot.registry.blocksByName.ladder.id
@@ -86,6 +92,11 @@ function inject (bot) {
       // (flying, the search starts in the air; gliding, from the glide; else from the player as it is)
       if (movements.allowFlying && physics.flying()) start.flown()
       else if (movements.allowGliding && bot.entity.elytraFlying) start.gliding = true
+      // (in a boat, from the cell it floats in)
+      else if (movements.allowBoats && physics.riding()) {
+        start.boat = true
+        start.hash += ':boat'
+      }
       start.live = true
     }
     if (movements.allowEntityDetection) {
@@ -180,8 +191,8 @@ function inject (bot) {
       // it must not stop the pass, or this node and every one after it keep their
       // raw corner coordinates and the executor steers into the frame
       if (curPoint.toBreak.length > 0 || curPoint.toPlace.some(p => !p.useOne)) break
-      // a flown step: the middle of its cell, wherever the ground is
-      if (curPoint.fly) {
+      // a flown step, or a boat's: the middle of its cell, wherever the ground is
+      if (curPoint.fly || curPoint.boat) {
         curPoint.x = Math.floor(curPoint.x) + 0.5
         curPoint.z = Math.floor(curPoint.z) + 0.5
         continue
@@ -438,6 +449,62 @@ function inject (bot) {
     }
   })
 
+  // Bedrock's boats: the boat put on the water and asked to get in (the tick of each), and the boat got out of
+  let boatAsked = null
+  let leftBoat = null
+
+  function boating (nextPoint) {
+    if (nextPoint.boat && !physics.riding()) {
+      // getting in: the boat put on the water of the step's cell, then a use of it gets in
+      physics.control(physics.getBoatStopController())
+      boatAsked ??= { placed: false, mounted: false, ticks: 0 }
+      if (++boatAsked.ticks > BOAT_WAIT_TICKS) {
+        boatAsked = null
+        resetPath('place_error')
+        return
+      }
+      const boat = physics.boatAt(nextPoint)
+      if (boat) {
+        if (!boatAsked.mounted) bot.mount(boat)
+        boatAsked.mounted = true
+        return
+      }
+      if (boatAsked.placed) return
+      // the boat in hand first, then put on the water
+      const item = bot.inventory.items().find(isBoatItem)
+      const water = bot.blockAt(new Vec3(Math.floor(nextPoint.x), nextPoint.y, Math.floor(nextPoint.z)), false)
+      if (!item || !water) return resetPath('place_error')
+      if (!isBoatItem(bot.heldItem)) {
+        bot.equip(item, 'hand').catch(() => {})
+        return
+      }
+      boatAsked.placed = true
+      bot.placeEntity(water, new Vec3(0, 1, 0)).catch(() => resetPath('place_error'))
+      return
+    }
+    boatAsked = null
+    if (nextPoint.boat) {
+      const paddle = physics.boatController(path)
+      if (paddle) physics.control(paddle)
+      else resetPath('boat')
+      return
+    }
+    // getting out onto the bank: once the boat has drifted to a stop
+    physics.control(physics.getBoatStopController())
+    if (!physics.boatStopped()) return
+    leftBoat = bot.vehicle
+    bot.dismount()
+  }
+
+  // the boat got out of, picked up (a hit breaks it) when it floats within reach
+  function pickUpBoat () {
+    const boat = leftBoat
+    leftBoat = null
+    if (!boat || !stateMovements.pickUpBoat || !bot.entities?.[boat.id]) return
+    if (boat.position.distanceTo(bot.entity.position) > BOAT_REACH) return
+    bot.attack(boat)
+  }
+
   function monitorMovement () {
     // Test freemotion
     if (stateMovements && stateMovements.allowFreeMotion && stateGoal && stateGoal.entity) {
@@ -607,12 +674,20 @@ function inject (bot) {
     let dz = nextPoint.z - p.z
     // (Bedrock's creative flight: a flown step is reached flying, in its cell; a walked one landed)
     const flies = stateMovements.allowFlying && (physics.flying() || !!nextPoint.fly || physics.landing)
-    // (a glide: landed, on its cell or one beside it)
-    const arrived = nextPoint.glide
-      ? physics.landedFrom(nextPoint)
-      : flies
-        ? physics.flying() === !!nextPoint.fly && physics.getFlyReached(nextPoint)({ pos: p }) && !(physics.landing && !bot.entity.onGround)
-        : Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1
+    // (a glide: landed, on its cell or one beside it; a boat's step: the boat in its cell)
+    // (in a boat past the next step: those it passed are reached too)
+    const boatPassed = nextPoint.boat && physics.riding() ? physics.boatPassed(path) : 0
+    if (boatPassed > 1) {
+      path.splice(0, boatPassed - 1)
+      nextPoint = path[0]
+    }
+    const arrived = nextPoint.boat
+      ? boatPassed > 0
+      : nextPoint.glide
+        ? physics.landedFrom(nextPoint)
+        : flies
+          ? physics.flying() === !!nextPoint.fly && physics.getFlyReached(nextPoint)({ pos: p }) && !(physics.landing && !bot.entity.onGround)
+          : Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1 && !(stateMovements.allowBoats && physics.riding())
     if (arrived) {
       // arrived at next point
       lastNodeTime = performance.now()
@@ -620,6 +695,8 @@ function inject (bot) {
         stop()
         return
       }
+      // out of a boat onto the bank: the boat picked up
+      if (nextPoint.leave) pickUpBoat()
       path.shift()
       if (path.length === 0) { // done
         // If the block the bot is standing on is not a full block only checking for the floored position can fail as
@@ -639,6 +716,13 @@ function inject (bot) {
       }
       dx = nextPoint.x - p.x
       dz = nextPoint.z - p.z
+    }
+
+    // Bedrock's boats: getting in, paddling to the next step, getting out
+    if (stateMovements.allowBoats && (nextPoint.boat || physics.riding())) {
+      boating(nextPoint)
+      if (performance.now() - lastNodeTime > BOAT_STUCK_MS) resetPath('stuck')
+      return
     }
 
     // Bedrock's elytra: the glide to the next step, as long as a prediction lands there; else a plan from the player
