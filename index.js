@@ -618,8 +618,13 @@ function inject (bot) {
     bot.look(Math.atan2(-dx, -dz), 0)
     bot.setControlState('forward', true)
     bot.setControlState('jump', false)
+    // (sneak sinks a swimmer: walking, it is let go)
+    if (stateMovements.allowSwimming) bot.setControlState('sneak', false)
 
-    if (bot.entity.isInWater) {
+    const swim = bot.entity.isInWater && stateMovements.allowSwimming && physics.swimController(path)
+    if (swim) {
+      physics.control(swim)
+    } else if (bot.entity.isInWater) {
       bot.setControlState('jump', true)
       bot.setControlState('sprint', false)
     } else if (stateMovements.allowSprinting && physics.canStraightLine(path, true)) {
