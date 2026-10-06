@@ -1,7 +1,8 @@
 // A bot on the Bedrock engine (prismarine-physics' fork, installed as prismarine-physics-bedrock beside the viewer this
 // fork is tested from), ticked as a client ticks it: the plugin acts on 'physicsTick', then the engine steps the player
 // with the keys and the look the plugin left. No server corrects it, so the player moves as the plugin's predictions
-// say it will.
+// say it will: each tick is held to them (tick.seen.mismatches, as the viewer's audit.js), the tick that follows a
+// prediction's first tick with the same keys and look being that tick, the boat and its turn included.
 //
 //   const { bot, world, tick } = bedrockBot((x, y, z) => y < 64 ? 'stone' : 'air')
 //   bot.loadPlugin(pathfinder) ... tick()   // one tick; tick.seen counts what the ticks went through
@@ -20,6 +21,21 @@ const { cloneValue } = require('prismarine-physics-bedrock/lib/bedrock/network/r
 
 const VERSION = 'bedrock_1.21.100'
 const KEYS = ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']
+const { isDeepStrictEqual } = require('util')
+
+// The inputs of a tick, and the player after it, to compare
+const inputsOf = (control, yaw, pitch) => ({ ...Object.fromEntries(KEYS.map(key => [key, !!control[key]])), yaw, pitch })
+function snapshot (state) {
+  const v = state.vehicle
+  return {
+    pos: [state.pos.x, state.pos.y, state.pos.z],
+    vel: [state.vel.x, state.vel.y, state.vel.z],
+    onGround: !!state.onGround,
+    elytraFlying: !!state.elytraFlying,
+    fireworkRocketDuration: state.fireworkRocketDuration ?? 0,
+    vehicle: v ? { pos: [v.pos.x, v.pos.y, v.pos.z], vel: [v.vel.x, v.vel.y, v.vel.z], yaw: v.yaw, turn: v.boat?.yRotD } : null
+  }
+}
 
 // The blocks by name at each cell (the layout), set ones over it
 function worldOf (registry, layout) {
@@ -81,7 +97,15 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     clearControlStates () { for (const key of KEYS) bot.controlState[key] = false },
     look: async (yaw, pitch) => { bot.entity.yaw = yaw; bot.entity.pitch = pitch },
     lookAt: async () => {},
-    physics: { simulatePlayer: (state, w) => physics.simulatePlayer(state, w) },
+    // (the first tick of each prediction since the last tick is kept, to hold the tick to)
+    physics: {
+      simulatePlayer: (state, w) => {
+        const inputs = inputsOf(state.control, state.yaw, state.pitch)
+        physics.simulatePlayer(state, w)
+        if (!runs.has(state)) runs.set(state, { inputs, after: snapshot(state) })
+        return state
+      }
+    },
     loadPlugin: plugin => plugin(bot)
   })
 
@@ -106,6 +130,12 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     const entity = { id, name: 'boat', position: new Vec3(block.position.x + 0.5, Math.fround(block.position.y + 0.95), block.position.z + 0.5), yaw: 180 - (bot.entity.yaw * 180) / Math.PI + 90 }
     bot.entities[id] = entity
     return entity
+  }
+  // a boat floating somewhere already (yaw: Bedrock degrees, 0 heading along +x)
+  function addBoat (x, y, z, yaw = 0) {
+    const id = nextEntityId++
+    bot.entities[id] = { id, name: 'boat', position: new Vec3(x, y, z), yaw }
+    return bot.entities[id]
   }
   bot.mount = entity => {
     bot.vehicle = entity
@@ -133,13 +163,26 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     set: value => { engineState = value }
   })
 
-  // the ticks so far, and what they went through
-  const seen = { ticks: 0, collided: 0, airborne: 0, gliding: 0, boosted: 0, riding: 0 }
+  // the ticks so far, and what they went through: with a prediction, and how many were not the prediction with their
+  // inputs (none with them: the plugin gave inputs it predicted nothing with; one: the tick was not as predicted)
+  const seen = { ticks: 0, collided: 0, airborne: 0, gliding: 0, boosted: 0, riding: 0, turned: 0, predicted: 0, mismatches: [] }
+  let runs = new Map()
   function tick () {
+    runs = new Map()
     bot.emit('physicsTick')
+    const inputs = inputsOf(bot.controlState, bot.entity.yaw, bot.entity.pitch)
+    const yawBefore = vehicle?.yaw
     const state = new PlayerState(bot, { ...bot.controlState })
     physics.simulatePlayer(state, world)
     state.apply(bot)
+    if (runs.size) {
+      seen.predicted++
+      const run = [...runs.values()].find(r => isDeepStrictEqual(r.inputs, inputs))
+      const actual = snapshot(state)
+      if (!run) seen.mismatches.push({ tick: seen.ticks, kind: 'input', inputs, predicted: [...runs.values()].map(r => r.inputs) })
+      else if (!isDeepStrictEqual(run.after, actual)) seen.mismatches.push({ tick: seen.ticks, kind: 'prediction', predicted: run.after, actual })
+    }
+    if (yawBefore !== undefined && state.vehicle) seen.turned += Math.abs(state.vehicle.yaw - yawBefore)
     // (the waves drew from the copy)
     if (state.randomState) randomState = state.randomState
     if (bot.vehicle && state.vehicle) bot.vehicle.position = state.vehicle.pos.clone()
@@ -151,7 +194,7 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     if (state.vehicle) seen.riding++
   }
   tick.seen = seen
-  return { bot, world, tick, physics }
+  return { bot, world, tick, physics, addBoat }
 }
 
 // Walks the bot to a goal with the plugin, a tick at a time: the ticks it took, or Infinity

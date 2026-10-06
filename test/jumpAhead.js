@@ -31,6 +31,7 @@ describe('jumping up a block on Bedrock', function () {
       assert.ok(Number.isFinite(ticks), `arrived: at ${at}`)
       assert.ok(at.distanceTo(new Vec3(11.5, 66, 0.5)) < 1, `at the goal: ${at}`)
       assert.strictEqual(seen.collided, 0, `ticks against a block's side, of ${ticks}`)
+      assert.deepStrictEqual(seen.mismatches, [], 'every tick as predicted')
     })
   }
 

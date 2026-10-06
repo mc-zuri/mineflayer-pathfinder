@@ -58,6 +58,7 @@ describe('creative flight on Bedrock', function () {
     assert.ok(!bot.bedrockPhysicsState.flying, 'it landed')
     assert.deepStrictEqual([Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z)], [26, 64, 0])
     assert.ok(bot.entity.onGround)
+    assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
   })
 
   it('finds the way across only when it may fly', function () {

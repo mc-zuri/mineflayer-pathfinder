@@ -40,6 +40,7 @@ describe('elytra gliding on Bedrock', function () {
     assert.ok(tick.seen.gliding > 10, `glided ${tick.seen.gliding} ticks`)
     assert.deepStrictEqual([Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z)], [30, 64, 0])
     assert.strictEqual(tick.seen.collided, 0, 'ran into nothing')
+    assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
   })
 
   it('finds no glide without the elytra worn', function () {
@@ -58,6 +59,7 @@ describe('elytra gliding on Bedrock', function () {
     assert.ok(tick.seen.boosted > 0 && rockets.count < 16, `boosted ${tick.seen.boosted} ticks, ${16 - rockets.count} rockets`)
     // (sprinting there: some 290 ticks)
     assert.ok(ticks < 200, `${ticks} ticks`)
+    assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
   })
 
   it('walks on flat ground without rockets', function () {
