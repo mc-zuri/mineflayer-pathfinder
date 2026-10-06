@@ -30,3 +30,34 @@ describe('stopping on Bedrock', function () {
     assert.strictEqual(Math.floor(bot.entity.position.x), 1, `still in the goal's cell: at ${bot.entity.position}`)
   })
 })
+
+describe('the walk\'s clock', function () {
+  this.timeout(20000)
+
+  it('tells a step taking too long by the clock given, its ticks\' time', function () {
+    const { bot, tick, world } = bedrockBot(flat)
+    bot.loadPlugin(pathfinder)
+    const movements = new Movements(bot)
+    movements.canDig = false
+    movements.scafoldingBlocks = []
+    bot.pathfinder.setMovements(movements)
+    // (50 ms a tick, as a client's ticks go; the machine runs them far faster)
+    let ticks = 0
+    bot.pathfinder.now = () => ticks * 50
+    const resets = []
+    bot.on('path_reset', reason => resets.push({ reason, ticks }))
+    bot.pathfinder.setGoal(new goals.GoalBlock(10, 64, 0))
+    tick()
+    ticks++
+    // a wall across the way, after the plan (no block update tells of it)
+    for (let z = -3; z <= 3; z++) for (let y = 64; y <= 66; y++) world.set(3, y, z, 'stone')
+    while (ticks < 120 && !resets.some(r => r.reason === 'stuck')) {
+      tick()
+      ticks++
+    }
+    const stuck = resets.find(r => r.reason === 'stuck')
+    assert.ok(stuck, `no step taking too long told: ${JSON.stringify(resets)}`)
+    // (3.5 seconds of ticks, 70, after the last step it reached: a few ticks into the walk)
+    assert.ok(stuck.ticks >= 70 && stuck.ticks <= 90, `told after ${stuck.ticks} ticks`)
+  })
+})

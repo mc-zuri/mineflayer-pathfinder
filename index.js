@@ -34,7 +34,10 @@ function inject (bot) {
   let digging = false
   let placing = false
   let placingBlock = null
-  let lastNodeTime = performance.now()
+  // the walk's clock (bot.pathfinder.now: a caller's, its ticks' time; else the machine's), and when the last step was
+  // reached by it
+  const now = () => bot.pathfinder?.now ? bot.pathfinder.now() : performance.now()
+  let lastNodeTime = now()
   let returningPos = null
   let stopPathing = false
   const physics = new Physics(bot)
@@ -47,6 +50,7 @@ function inject (bot) {
   bot.pathfinder.thinkTimeout = 5000 // ms
   bot.pathfinder.tickTimeout = 40 // ms, amount of thinking per tick (max 50 ms)
   bot.pathfinder.tickNodes = Infinity // nodes, amount of thinking per tick too (a search sliced the same every time)
+  bot.pathfinder.now = null // ms, the clock a step taking too long is told by (a caller's, its ticks'); else the machine's
   bot.pathfinder.searchRadius = -1 // in blocks, limits of the search area, -1: don't limit the search
   bot.pathfinder.enablePathShortcut = false // disabled by default as it can cause bugs in specific configurations
   bot.pathfinder.LOSWhenPlacingBlocks = true
@@ -547,7 +551,7 @@ function inject (bot) {
     }
 
     if (path.length === 0) {
-      lastNodeTime = performance.now()
+      lastNodeTime = now()
       if (stateGoal && stateMovements) {
         if (stateGoal.isEnd(bot.entity.position.floored())) {
           if (!dynamicGoal) {
@@ -592,7 +596,7 @@ function inject (bot) {
               resetPath('dig_error')
             })
             .then(function () {
-              lastNodeTime = performance.now()
+              lastNodeTime = now()
               digging = false
             })
         }
@@ -663,7 +667,7 @@ function inject (bot) {
               .then(() => {
                 lockPlaceBlock.release()
                 placing = false
-                lastNodeTime = performance.now()
+                lastNodeTime = now()
               })
           })
           .catch(_ignoreError => {})
@@ -676,7 +680,7 @@ function inject (bot) {
     if (passed > 0) {
       path.splice(0, passed)
       nextPoint = path[0]
-      lastNodeTime = performance.now()
+      lastNodeTime = now()
     }
     let dx = nextPoint.x - p.x
     const dy = nextPoint.y - p.y
@@ -708,7 +712,7 @@ function inject (bot) {
           : Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1 && !(stateMovements.allowBoats && physics.riding()) && !sliding
     if (arrived) {
       // arrived at next point
-      lastNodeTime = performance.now()
+      lastNodeTime = now()
       if (stopPathing) {
         stop()
         return
@@ -744,7 +748,7 @@ function inject (bot) {
     // Bedrock's boats: getting in, paddling to the next step, getting out
     if (stateMovements.allowBoats && (nextPoint.boat || physics.riding())) {
       boating(nextPoint)
-      if (performance.now() - lastNodeTime > BOAT_STUCK_MS) resetPath('stuck')
+      if (now() - lastNodeTime > BOAT_STUCK_MS) resetPath('stuck')
       return
     }
 
@@ -763,7 +767,7 @@ function inject (bot) {
         // (none gets there: the keys let go, as a prediction shows the tick)
         if (fly) physics.control(fly)
         else physics.coast()
-        if (performance.now() - lastNodeTime > 3500) resetPath('stuck')
+        if (now() - lastNodeTime > 3500) resetPath('stuck')
         return
       }
     }
@@ -784,7 +788,7 @@ function inject (bot) {
     } else if (jump) {
       if (jump.skip) {
         path.shift()
-        lastNodeTime = performance.now()
+        lastNodeTime = now()
       }
       physics.control(jump.controller)
     } else if (bot.entity.isInWater) {
@@ -812,7 +816,7 @@ function inject (bot) {
     }
 
     // check for futility
-    if (performance.now() - lastNodeTime > 3500) {
+    if (now() - lastNodeTime > 3500) {
       // should never take this long to go to the next node
       resetPath('stuck')
     }
