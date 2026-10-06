@@ -62,6 +62,20 @@ describe('elytra gliding on Bedrock', function () {
     assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
   })
 
+  it('glides up onto high ground with firework rockets, coming down onto it from above', function () {
+    // (flat ground, and a plateau 7 wide and 10 high 40 blocks east: no way up but flying)
+    const plateau = (x, y, z) => y < 64 || (x >= 40 && x <= 46 && Math.abs(z) <= 3 && y < 74) ? 'stone' : 'air'
+    const rockets = { name: 'firework_rocket', count: 16 }
+    const { bot, tick } = setup(plateau, { elytra: true, items: [rockets] })
+    const ticks = walkTo(bot, tick, new goals.GoalBlock(43, 74, 0), 800)
+    const pos = bot.entity.position
+    assert.ok(Number.isFinite(ticks), `arrived: at ${pos}`)
+    assert.deepStrictEqual([Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z)], [43, 74, 0])
+    assert.ok(rockets.count < 16, 'rockets used')
+    assert.strictEqual(tick.seen.collided, 0, 'ran into nothing')
+    assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
+  })
+
   it('walks on flat ground without rockets', function () {
     const { bot, movements } = setup(flat, { elytra: true })
     const path = search(bot, movements, new goals.GoalBlock(40, 64, 0)).path
