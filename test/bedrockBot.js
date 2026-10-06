@@ -75,7 +75,7 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     registry,
     version: VERSION,
     game: { minY: -64, gameMode },
-    entity: { position, velocity: new Vec3(0, 0, 0), onGround: true, yaw: 0, pitch: 0, effects: {}, attributes: {}, metadata: { flags: {} } },
+    entity: { onGround: true, yaw: 0, pitch: 0, effects: {}, attributes: {}, metadata: { flags: {} } },
     entities: {},
     jumpTicks: 0,
     jumpQueued: false,
@@ -111,6 +111,12 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     loadPlugin: plugin => plugin(bot)
   })
 
+  // the player's position and velocity: copies, as a client gives them (writing to one moves or stops nothing; the
+  // engine's tick alone moves the player)
+  let feet = position.clone()
+  let speed = new Vec3(0, 0, 0)
+  Object.defineProperty(bot.entity, 'position', { get: () => feet.clone(), set: value => { feet = value.clone() }, enumerable: true })
+  Object.defineProperty(bot.entity, 'velocity', { get: () => speed.clone(), set: value => { speed = value.clone() }, enumerable: true })
   if (elytra) bot.inventory.slots[6] = { name: 'elytra', count: 1 }
 
   // boats, as a client has them: an entity put on the water (placeEntity), got in (mount: the engine's vehicle, as
