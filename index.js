@@ -567,6 +567,11 @@ function inject (bot) {
 
     let nextPoint = path[0]
     const p = bot.entity.position
+    // (Bedrock: the fly key says a jump pressed in the air is meant, a takeoff's or a glide's; held over from one a new
+    // plan cut short, a pillar's jump would start a glide or a flight)
+    if ((stateMovements.allowFlying || stateMovements.allowGliding) && bot.controlState.fly && !nextPoint.fly && !nextPoint.glide && !physics.flying() && !bot.entity.elytraFlying && !physics.landing) {
+      bot.setControlState('fly', false)
+    }
 
     // Handle digging
     if (digging || nextPoint.toBreak.length > 0) {

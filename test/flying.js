@@ -61,6 +61,14 @@ describe('creative flight on Bedrock', function () {
     assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
   })
 
+  it('lets go of the fly key held over from a takeoff a new plan cut short', function () {
+    // (the key that says a jump in the air is meant: held on, a pillar's jump would take off)
+    const { bot, tick } = setup(true)
+    bot.controlState.fly = true
+    walkTo(bot, tick, new goals.GoalBlock(0, 64, 2), 3)
+    assert.strictEqual(bot.controlState.fly, false)
+  })
+
   it('finds the way across only when it may fly', function () {
     const search = allowFlying => {
       const { bot, movements } = setup(allowFlying)
