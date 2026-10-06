@@ -23,4 +23,18 @@ describe('prediction controller', () => {
   it('keeps the pitch on Java', () => {
     assert.strictEqual(controlled('pc', -0.6).pitch, -0.6)
   })
+
+  it('swims sprinting where it looks: at the next point', () => {
+    const physics = new Physics({ registry: { type: 'bedrock' }, blockAt: () => null })
+    const state = { pos: new Vec3(0.5, 60, 0.5), yaw: 0, pitch: 0, control: {} }
+    physics.getSwimController(new Vec3(3.5, 63, 0.5), { sprint: true, jump: false, sneak: false })(state, 0)
+    assert.strictEqual(state.pitch, Math.PI / 4)
+    assert.strictEqual(state.yaw, Math.atan2(-3, -0))
+    assert.deepStrictEqual(state.control, { forward: true, jump: false, sneak: false, sprint: true })
+    // straight up: no sprint, no turn, rising
+    const above = { pos: new Vec3(3.45, 60, 0.5), yaw: 1, pitch: 0, control: {} }
+    physics.getSwimController(new Vec3(3.5, 63, 0.5), { sprint: true, jump: true, sneak: false })(above, 0)
+    assert.deepStrictEqual([above.yaw, above.pitch], [1, 0])
+    assert.deepStrictEqual(above.control, { forward: false, jump: true, sneak: false, sprint: false })
+  })
 })

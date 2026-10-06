@@ -621,7 +621,9 @@ function inject (bot) {
     // (sneak sinks a swimmer: walking, it is let go)
     if (stateMovements.allowSwimming) bot.setControlState('sneak', false)
 
-    const swim = bot.entity.isInWater && stateMovements.allowSwimming && physics.swimController(path)
+    // afloat: in the water, or bobbing over it (out of it for the engine, the feet's cell water and nothing under them)
+    const afloat = bot.entity.isInWater || (!bot.entity.onGround && stateMovements.getBlock(p.floored(), 0, 0, 0).liquid)
+    const swim = afloat && stateMovements.allowSwimming && physics.swimController(path, stateMovements.allowSprinting)
     if (swim) {
       physics.control(swim)
     } else if (bot.entity.isInWater) {
