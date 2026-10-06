@@ -685,7 +685,7 @@ function inject (bot) {
     // player has slowed in it, not sliding through it; meanwhile it lets go of the keys)
     const sliding = physics.bedrock && path.length === 1 && Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z) > ARRIVE_SPEED
     if (sliding && Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1 && !nextPoint.glide && !nextPoint.fly && !nextPoint.boat) {
-      bot.clearControlStates()
+      physics.coast()
       return
     }
     // (a glide: landed, on its cell or one beside it; a boat's step: the boat in its cell)
