@@ -83,8 +83,10 @@ function inject (bot) {
       // Offset the floored bot position by one if we are standing on a block that has not the full height but is solid
       const offset = (b && dy > 0.001 && bot.entity.onGround && !stateMovements.emptyBlocks.has(b.type)) ? 1 : 0
       start = new Move(p.x, p.y + offset, p.z, movements.countScaffoldingItems(), 0)
-      // (flying, the search starts in the air)
+      // (flying, the search starts in the air; gliding, from the glide; else from the player as it is)
       if (movements.allowFlying && physics.flying()) start.flown()
+      else if (movements.allowGliding && bot.entity.elytraFlying) start.gliding = true
+      start.live = true
     }
     if (movements.allowEntityDetection) {
       if (resetEntityIntersects) {
@@ -92,6 +94,7 @@ function inject (bot) {
       }
       movements.updateCollisionIndex()
     }
+    movements.startSearch?.(goal)
     const astarContext = new AStar(start, movements, goal, timeout, tickTimeout, searchRadius)
     let result = astarContext.compute()
     if (optimizePath) result.path = postProcessPath(result.path)
@@ -604,9 +607,12 @@ function inject (bot) {
     let dz = nextPoint.z - p.z
     // (Bedrock's creative flight: a flown step is reached flying, in its cell; a walked one landed)
     const flies = stateMovements.allowFlying && (physics.flying() || !!nextPoint.fly || physics.landing)
-    const arrived = flies
-      ? physics.flying() === !!nextPoint.fly && physics.getFlyReached(nextPoint)({ pos: p }) && !(physics.landing && !bot.entity.onGround)
-      : Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1
+    // (a glide: landed, on its cell or one beside it)
+    const arrived = nextPoint.glide
+      ? physics.landedFrom(nextPoint)
+      : flies
+        ? physics.flying() === !!nextPoint.fly && physics.getFlyReached(nextPoint)({ pos: p }) && !(physics.landing && !bot.entity.onGround)
+        : Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1
     if (arrived) {
       // arrived at next point
       lastNodeTime = performance.now()
@@ -633,6 +639,14 @@ function inject (bot) {
       }
       dx = nextPoint.x - p.x
       dz = nextPoint.z - p.z
+    }
+
+    // Bedrock's elytra: the glide to the next step, as long as a prediction lands there; else a plan from the player
+    if (stateMovements.allowGliding && (nextPoint.glide || (bot.entity.elytraFlying && !bot.entity.onGround))) {
+      const glide = nextPoint.glide && physics.glideController(path)
+      if (glide) physics.control(glide)
+      else resetPath('glide')
+      return
     }
 
     // Bedrock's creative flight: taking off, flying to the next step, landing

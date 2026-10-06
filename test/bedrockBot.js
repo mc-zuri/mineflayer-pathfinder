@@ -13,9 +13,10 @@ require('prismarine-physics-bedrock/lib/ts-hooks')
 const physicsFile = require.resolve('prismarine-physics')
 require.cache[physicsFile] = { id: physicsFile, filename: physicsFile, loaded: true, exports: require('prismarine-physics-bedrock') }
 for (const file of Object.keys(require.cache)) {
-  if (/mineflayer-pathfinder[\\/](index|lib[\\/]physics)\.js$/.test(file)) delete require.cache[file]
+  if (/mineflayer-pathfinder[\\/](index|lib[\\/]\w+)\.js$/.test(file)) delete require.cache[file]
 }
 const { Physics, PlayerState } = require('prismarine-physics-bedrock')
+const { cloneValue } = require('prismarine-physics-bedrock/lib/bedrock/network/rewind.ts')
 
 const VERSION = 'bedrock_1.21.100'
 const KEYS = ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']
@@ -47,7 +48,8 @@ function worldOf (registry, layout) {
   }
 }
 
-function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'survival' } = {}) {
+// items: the hotbar ({ name, count }); elytra: worn
+function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'survival', items = [], elytra = false } = {}) {
   const registry = require('prismarine-registry')(VERSION)
   const world = worldOf(registry, layout)
   const physics = Physics(registry, world)
@@ -63,7 +65,15 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     fireworkRocketDuration: 0,
     abilities: { flags: { mayFly: gameMode === 'creative' } },
     food: 20,
-    inventory: { items: () => [], slots: new Array(46).fill(null) },
+    inventory: { items: () => items.filter(item => item.count > 0), slots: new Array(46).fill(null) },
+    heldItem: null,
+    equip: async item => { bot.heldItem = item },
+    // the held item used: a firework rocket boosts the glide on the next tick, and goes
+    activateItem () {
+      if (bot.heldItem?.name !== 'firework_rocket' || !bot.heldItem.count) return
+      bot.heldItem.count--
+      bot.fireworkUsed = true
+    },
     controlState: Object.fromEntries(KEYS.map(key => [key, false])),
     blockAt: pos => world.getBlock(pos),
     setControlState (control, pressed) { bot.controlState[control] = pressed },
@@ -74,8 +84,16 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     loadPlugin: plugin => plugin(bot)
   })
 
+  if (elytra) bot.inventory.slots[6] = { name: 'elytra', count: 1 }
+  // the engine's state of the player: a copy to each prediction, as a client gives it (a prediction changes its own)
+  let engineState
+  Object.defineProperty(bot, 'bedrockPhysicsState', {
+    get: () => engineState === undefined ? undefined : cloneValue(engineState),
+    set: value => { engineState = value }
+  })
+
   // the ticks so far, and what they went through
-  const seen = { ticks: 0, collided: 0, airborne: 0 }
+  const seen = { ticks: 0, collided: 0, airborne: 0, gliding: 0, boosted: 0 }
   function tick () {
     bot.emit('physicsTick')
     const state = new PlayerState(bot, { ...bot.controlState })
@@ -84,6 +102,8 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
     seen.ticks++
     if (state.isCollidedHorizontally) seen.collided++
     if (!state.onGround) seen.airborne++
+    if (state.elytraFlying) seen.gliding++
+    if (state.fireworkRocketDuration > 0) seen.boosted++
   }
   tick.seen = seen
   return { bot, world, tick, physics }
