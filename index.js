@@ -83,6 +83,8 @@ function inject (bot) {
       // Offset the floored bot position by one if we are standing on a block that has not the full height but is solid
       const offset = (b && dy > 0.001 && bot.entity.onGround && !stateMovements.emptyBlocks.has(b.type)) ? 1 : 0
       start = new Move(p.x, p.y + offset, p.z, movements.countScaffoldingItems(), 0)
+      // (flying, the search starts in the air)
+      if (movements.allowFlying && physics.flying()) start.flown()
     }
     if (movements.allowEntityDetection) {
       if (resetEntityIntersects) {
@@ -175,6 +177,12 @@ function inject (bot) {
       // it must not stop the pass, or this node and every one after it keep their
       // raw corner coordinates and the executor steers into the frame
       if (curPoint.toBreak.length > 0 || curPoint.toPlace.some(p => !p.useOne)) break
+      // a flown step: the middle of its cell, wherever the ground is
+      if (curPoint.fly) {
+        curPoint.x = Math.floor(curPoint.x) + 0.5
+        curPoint.z = Math.floor(curPoint.z) + 0.5
+        continue
+      }
       const b = bot.blockAt(new Vec3(curPoint.x, curPoint.y, curPoint.z))
       // An openable block is a doorway: its node is the floor centre. getPositionOnTopOf
       // would put it on top of the swung-open leaf (offset ~0.9 and a block up), which
@@ -594,7 +602,12 @@ function inject (bot) {
     let dx = nextPoint.x - p.x
     const dy = nextPoint.y - p.y
     let dz = nextPoint.z - p.z
-    if (Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1) {
+    // (Bedrock's creative flight: a flown step is reached flying, in its cell; a walked one landed)
+    const flies = stateMovements.allowFlying && (physics.flying() || !!nextPoint.fly || physics.landing)
+    const arrived = flies
+      ? physics.flying() === !!nextPoint.fly && physics.getFlyReached(nextPoint)({ pos: p }) && !(physics.landing && !bot.entity.onGround)
+      : Math.abs(dx) <= 0.35 && Math.abs(dz) <= 0.35 && Math.abs(dy) < 1
+    if (arrived) {
       // arrived at next point
       lastNodeTime = performance.now()
       if (stopPathing) {
@@ -620,6 +633,21 @@ function inject (bot) {
       }
       dx = nextPoint.x - p.x
       dz = nextPoint.z - p.z
+    }
+
+    // Bedrock's creative flight: taking off, flying to the next step, landing
+    if (stateMovements.allowFlying && (physics.flying() || nextPoint.fly || physics.landing)) {
+      const fly = physics.flyController(path)
+      if (fly || physics.flying() || nextPoint.fly) {
+        if (fly) {
+          physics.control(fly)
+        } else {
+          bot.setControlState('forward', false)
+          bot.setControlState('sprint', false)
+        }
+        if (performance.now() - lastNodeTime > 3500) resetPath('stuck')
+        return
+      }
     }
 
     bot.look(Math.atan2(-dx, -dz), 0)

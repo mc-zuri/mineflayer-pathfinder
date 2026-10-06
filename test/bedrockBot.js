@@ -94,8 +94,12 @@ function walkTo (bot, tick, goal, maxTicks = 400) {
   const walk = { reached: false }
   bot.once('goal_reached', () => { walk.reached = true })
   bot.pathfinder.setGoal(goal)
-  for (let i = 0; i < maxTicks && !walk.reached; i++) tick()
-  return walk.reached ? tick.seen.ticks : Infinity
+  let ticks = 0
+  while (ticks < maxTicks && !walk.reached) {
+    tick()
+    ticks++
+  }
+  return walk.reached ? ticks : Infinity
 }
 
 module.exports = { bedrockBot, walkTo, VERSION }
