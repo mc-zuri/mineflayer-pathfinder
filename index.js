@@ -46,6 +46,7 @@ function inject (bot) {
 
   bot.pathfinder.thinkTimeout = 5000 // ms
   bot.pathfinder.tickTimeout = 40 // ms, amount of thinking per tick (max 50 ms)
+  bot.pathfinder.tickNodes = Infinity // nodes, amount of thinking per tick too (a search sliced the same every time)
   bot.pathfinder.searchRadius = -1 // in blocks, limits of the search area, -1: don't limit the search
   bot.pathfinder.enablePathShortcut = false // disabled by default as it can cause bugs in specific configurations
   bot.pathfinder.LOSWhenPlacingBlocks = true
@@ -80,6 +81,7 @@ function inject (bot) {
     const resetEntityIntersects = options.resetEntityIntersects ?? true
     const timeout = options.timeout ?? bot.pathfinder.thinkTimeout
     const tickTimeout = options.tickTimeout ?? bot.pathfinder.tickTimeout
+    const tickNodes = options.tickNodes ?? bot.pathfinder.tickNodes
     const searchRadius = options.searchRadius ?? bot.pathfinder.searchRadius
     let start
     if (options.startMove) {
@@ -108,7 +110,7 @@ function inject (bot) {
       movements.updateCollisionIndex()
     }
     movements.startSearch?.(goal)
-    const astarContext = new AStar(start, movements, goal, timeout, tickTimeout, searchRadius)
+    const astarContext = new AStar(start, movements, goal, timeout, tickTimeout, searchRadius, tickNodes)
     let result = astarContext.compute()
     if (optimizePath) result.path = postProcessPath(result.path)
     yield { result, astarContext }
