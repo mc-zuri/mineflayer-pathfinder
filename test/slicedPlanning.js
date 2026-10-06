@@ -6,6 +6,9 @@ const assert = require('assert')
 const { bedrockBot, walkTo } = require('./bedrockBot')
 const { pathfinder, Movements, goals } = require('..')
 
+const plateau = (x, y, z) => y < 64 || (x >= 40 && x <= 46 && Math.abs(z) <= 3 && y < 74) ? 'stone' : 'air'
+// a wall 3 high along x 5 from z -12 to 12: a goal behind it is a long way round, the best path so far ending at it
+const wall = (x, y, z) => y < 64 || (x === 5 && Math.abs(z) <= 12 && y < 67) ? 'stone' : 'air'
 const steps = (x, y) => y < 64 || (x >= 4 && y < 65) || (x >= 8 && y < 66) ? 'stone' : 'air'
 
 // (replans: those a walk may make, a glide's: a glide is planned from where it takes off, and the player may have gone
@@ -43,6 +46,28 @@ describe('planning a slice a tick on Bedrock', function () {
     const { result } = searches.next().value
     assert.strictEqual(result.status, 'partial')
     assert.strictEqual(result.visitedNodes, 1)
+  })
+
+  it('glides up onto a plateau with rockets', function () {
+    const seen = sliced(plateau, { elytra: true, items: [{ name: 'firework_rocket', count: 16 }] }, { allowGliding: true }, new goals.GoalBlock(43, 74, 0), 1200, ['glide'])
+    assert.ok(seen.gliding > 0)
+  })
+
+  it('walks round a wall, planning on when the best path so far ends at it', function () {
+    const { bot, tick } = bedrockBot(wall)
+    bot.loadPlugin(pathfinder)
+    bot.pathfinder.tickTimeout = Infinity
+    bot.pathfinder.tickNodes = 1
+    const movements = new Movements(bot)
+    movements.canDig = false
+    movements.scafoldingBlocks = []
+    movements.allowParkour = false
+    bot.pathfinder.setMovements(movements)
+    const resets = []
+    bot.on('path_reset', reason => resets.push(reason))
+    const ticks = walkTo(bot, tick, new goals.GoalBlock(8, 64, 0), 1500)
+    assert.ok(Number.isFinite(ticks), `arrived: at ${bot.entity.position}`)
+    assert.ok(!resets.includes('goal_missed'), `planned over ${resets.filter(r => r === 'goal_missed').length} times`)
   })
 
   it('sprints up steps', function () {
