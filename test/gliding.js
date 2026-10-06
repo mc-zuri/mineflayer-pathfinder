@@ -88,6 +88,18 @@ describe('elytra gliding on Bedrock', function () {
     assert.deepStrictEqual(tick.seen.mismatches, [], 'every tick as predicted')
   })
 
+  it('plans the rest of the way when its last step is reached and its goal is not (a glide landing beside it)', function () {
+    // a goal the search takes at x 20 that then wants x 21: the walk ends a step short of it
+    const { bot, tick } = setup(flat, {})
+    const goal = new goals.GoalBlock(20, 64, 0)
+    let moved = false
+    goal.isEnd = node => node.x === (moved ? 21 : 20) && node.y === 64 && node.z === 0
+    bot.once('path_update', () => { moved = true })
+    const ticks = walkTo(bot, tick, goal, 400)
+    assert.ok(Number.isFinite(ticks), `arrived: at ${bot.entity.position}`)
+    assert.strictEqual(Math.floor(bot.entity.position.x), 21)
+  })
+
   it('walks on flat ground without rockets', function () {
     const { bot, movements } = setup(flat, { elytra: true })
     const path = search(bot, movements, new goals.GoalBlock(40, 64, 0)).path

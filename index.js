@@ -709,6 +709,10 @@ function inject (bot) {
         if (!dynamicGoal && stateGoal && (stateGoal.isEnd(p.floored()) || stateGoal.isEnd(p.floored().offset(0, 1, 0)))) {
           bot.emit('goal_reached', stateGoal)
           stateGoal = null
+        } else if (physics.bedrock && !dynamicGoal && stateGoal) {
+          // (Bedrock: the last step reached and the goal not, a glide landing beside it: the rest of the way planned)
+          bot.emit('path_reset', 'goal_missed')
+          pathUpdated = false
         }
         fullStop()
         return
