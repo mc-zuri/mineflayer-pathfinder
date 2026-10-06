@@ -1,6 +1,6 @@
 /* eslint-env mocha */
 // Bedrock boats (Movements.allowBoats): a player with a boat puts it on the water beside the bank, gets in, paddles
-// across and gets out onto the far bank, picking the boat up. The boat goes
+// across and gets out onto the far bank, picking the boat up; or gets in a boat floating there already. The boat goes
 // where the route goes, turning no more than it has to (it pursues a point ahead, minding the turn it is in), and every
 // tick of it is the tick predicted. Without a boat it swims.
 const assert = require('assert')
@@ -77,6 +77,17 @@ describe('boats on Bedrock', function () {
     const { seen } = crossing(island, boatItem(), across, 800)
     assert.ok(seen.riding > 20, `rode ${seen.riding} ticks`)
     assert.ok(seen.turned < 300, `turned ${seen.turned.toFixed(0)}°`)
+  })
+
+  it('gets in a boat floating by the bank, turns it about, and takes it along', function () {
+    // (heading west, away from the far bank; no boat of its own)
+    const items = []
+    const { ticks, seen } = crossing(lake, items, across, 800, ({ addBoat }) => addBoat(2.5, Math.fround(63.95), 0.5, 180))
+    assert.ok(seen.riding > 20, `rode ${seen.riding} ticks`)
+    // (half a turn, and the arc a boat turning on one paddle makes, back onto the way: no circle)
+    assert.ok(seen.turned < 360, `turned ${seen.turned.toFixed(0)}° to turn about`)
+    assert.ok(ticks < 130, `${ticks} ticks`)
+    assert.strictEqual(items.find(item => /boat$/.test(item.name))?.count, 1, 'the boat picked up')
   })
 
   it('finds no boat moves without a boat, nor when boats are not allowed', function () {
