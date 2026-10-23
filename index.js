@@ -362,6 +362,9 @@ function inject (bot) {
    */
   function fullStop () {
     bot.clearControlStates()
+    // On Bedrock the server moves the player: setting its velocity or position here is a teleport it corrects.
+    // Letting go of the keys is enough, the player slows down by itself.
+    if (bot.registry?.type === 'bedrock') return
 
     // Force horizontal velocity to 0 (otherwise inertia can move us too far)
     // Kind of cheaty, but the server will not tell the difference

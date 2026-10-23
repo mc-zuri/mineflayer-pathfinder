@@ -167,17 +167,21 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
 
   // the ticks so far, and what they went through: with a prediction, and how many were not the prediction with their
   // inputs (none with them: the plugin gave inputs it predicted nothing with; one: the tick was not as predicted)
-  const seen = { ticks: 0, collided: 0, airborne: 0, gliding: 0, boosted: 0, riding: 0, turned: 0, predicted: 0, mismatches: [] }
+  const seen = { ticks: 0, teleports: 0, collided: 0, airborne: 0, gliding: 0, boosted: 0, riding: 0, turned: 0, predicted: 0, mismatches: [] }
   let runs = new Map()
   const elsewhere = new WeakSet()
+  // the player as the engine left it: moved or slowed by anything else between two ticks, the server would correct it
+  let left
   function tick () {
     runs = new Map()
     bot.emit('physicsTick')
+    if (left && (!bot.entity.position.equals(left.pos) || !bot.entity.velocity.equals(left.vel))) seen.teleports++
     const inputs = inputsOf(bot.controlState, bot.entity.yaw, bot.entity.pitch)
     const yawBefore = vehicle?.yaw
     const state = new PlayerState(bot, { ...bot.controlState })
     physics.simulatePlayer(state, world)
     state.apply(bot)
+    left = { pos: bot.entity.position.clone(), vel: bot.entity.velocity.clone() }
     if (runs.size) {
       seen.predicted++
       const run = [...runs.values()].find(r => isDeepStrictEqual(r.inputs, inputs))
