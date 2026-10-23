@@ -124,6 +124,18 @@ function bedrockBot (layout, { position = new Vec3(0.5, 64, 0.5), gameMode = 'su
   })
   Object.defineProperty(bot, 'bedrockRandomState', { get: () => new Uint8Array(randomState) })
   bot.vehicle = null
+  // a block placed against another, as a server takes it: refused where it would be inside the player (bot.refused)
+  bot.refused = 0
+  bot.placeBlock = async (block, face) => {
+    const item = bot.heldItem
+    if (!item?.count) throw new Error('nothing in hand')
+    const at = block.position.plus(face)
+    const p = bot.entity.position
+    const inside = p.x + 0.3 > at.x && p.x - 0.3 < at.x + 1 && p.z + 0.3 > at.z && p.z - 0.3 < at.z + 1 && p.y + 1.8 > at.y && p.y < at.y + 1
+    if (inside) { bot.refused++; throw new Error('the block would be inside the player') }
+    item.count--
+    world.set(at.x, at.y, at.z, item.name)
+  }
   bot.placeEntity = async (block, face) => {
     const item = bot.heldItem
     if (!/boat$/.test(item?.name ?? '') || !item.count) throw new Error('no boat in hand')
